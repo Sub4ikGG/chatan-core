@@ -46,6 +46,20 @@ class UserTokenService(private val database: Database) {
         }
     }
 
+    suspend fun fetch(deviceId: String, userId: Long): TokenModel? {
+        return dbQuery {
+            val row = UserToken.select(where = { (UserToken.deviceId eq deviceId) and (UserToken.userId eq userId) }).singleOrNull()
+                ?: return@dbQuery null
+
+            TokenModel(
+                id = row[UserToken.id],
+                userId = row[UserToken.userId],
+                deviceId = row[UserToken.deviceId],
+                refreshToken = row[UserToken.refreshToken]
+            )
+        }
+    }
+
     suspend fun update(userId: Long, deviceId: String, refreshToken: String) {
         dbQuery {
             UserToken.update(where = { (UserToken.userId eq userId) and (UserToken.deviceId eq deviceId) }) {
