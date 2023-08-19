@@ -21,7 +21,11 @@ fun Application.configureAuthRouting() {
         post("/sign-up") {
             val deviceId = getDeviceId() ?: return@post call.respond(Response.error<String>(code = 400))
             val signUpRequest = call.receive<SignUpRequest>()
-            if (userService.fetch(name = signUpRequest.name) != null) return@post call.respond(Response.error<String>(code = 409))
+            if (userService.fetch(name = signUpRequest.name) != null) return@post call.respond(
+                Response.error<String>(
+                    code = 409
+                )
+            )
 
             val securedPassword = PasswordService.encryptPassword(password = signUpRequest.password)
             val userId = userService.create(name = signUpRequest.name, password = securedPassword)
@@ -31,7 +35,48 @@ fun Application.configureAuthRouting() {
 
             userTokenService.create(userId = userId, deviceId = deviceId, refreshToken = refreshToken)
 
-            call.respond(HttpStatusCode.OK, Response.success(data = SignUpResponse(token = token, refreshToken = refreshToken)))
+            call.respond(
+                HttpStatusCode.OK,
+                Response.success(
+                    data = SignUpResponse(
+                        name = signUpRequest.name,
+                        token = token,
+                        refreshToken = refreshToken
+                    )
+                )
+            )
+        }
+
+        post("/sign-in") {
+            val deviceId = getDeviceId() ?: return@post call.respond(Response.error<String>(code = 400))
+            val signInRequest = call.receive<SignInRequest>()
+            val user = userService.fetch(name = signInRequest.name) ?: return@post call.respond(
+                Response.error<String>(
+                    code = 400,
+                    message = "Неверный логин или пароль"
+                )
+            )
+
+            if (user.password != PasswordService.encryptPassword(signInRequest.password)) return@post call.respond(
+                Response.error<String>(code = 400, message = "Неверный логин или пароль")
+            )
+
+            val token = JwtService.encryptJson(json = user.id.toString())
+            val refreshToken = JwtService.generateRefreshToken()
+
+            if(userTokenService.fetch(deviceId = deviceId, refreshToken = refreshToken) != null)
+                userTokenService.update(userId = user.id, deviceId = deviceId, refreshToken = refreshToken)
+            else userTokenService.create(userId = user.id, deviceId = deviceId, refreshToken = refreshToken)
+
+            call.respond(
+                HttpStatusCode.OK, Response.success(
+                    data = SignInResponse(
+                        name = user.name,
+                        token = token,
+                        refreshToken = refreshToken
+                    )
+                )
+            )
         }
     }
 }
