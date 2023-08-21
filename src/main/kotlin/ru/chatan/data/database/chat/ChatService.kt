@@ -1,9 +1,6 @@
 package ru.chatan.data.database.chat
 
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.SchemaUtils
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import ru.chatan.data.database.chat.models.ChatModel
 import ru.chatan.data.database.dbQuery
@@ -33,6 +30,16 @@ class ChatService(private val database: Database) {
                     description = it[Chat.description]
                 )
             }
+        }
+    }
+
+    suspend fun create(name: String, description: String, code: String): Long {
+        return dbQuery {
+            Chat.insert {
+                it[Chat.name] = name
+                it[Chat.code] = code
+                it[Chat.description] = description
+            }[Chat.id]
         }
     }
 
