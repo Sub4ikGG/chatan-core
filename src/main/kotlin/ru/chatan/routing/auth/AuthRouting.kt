@@ -19,79 +19,88 @@ fun Application.configureAuthRouting() {
     val userTokenService = UserTokenService(database)
 
     routing {
-        post("/sign-up") {
-            val deviceId = getDeviceId() ?: return@post call.respond(Response.error<String>(code = 400))
-            val signUpRequest = call.receive<SignUpRequest>()
-            if (userService.fetch(name = signUpRequest.name) != null) return@post call.respond(
-                Response.error<String>(
-                    code = 409
-                )
-            )
-
-            val securedPassword = PasswordService.encryptPassword(password = signUpRequest.password)
-            val userId = userService.create(name = signUpRequest.name, password = securedPassword)
-
-            val token = JwtService.encryptJson(json = userId.toString())
-            val refreshToken = JwtService.generateRefreshToken()
-
-            userTokenService.create(userId = userId, deviceId = deviceId, refreshToken = refreshToken)
-
-            call.respond(
-                HttpStatusCode.OK,
-                Response.success(
-                    data = SignUpResponse(
-                        name = signUpRequest.name,
-                        token = token,
-                        refreshToken = refreshToken
+        host("api.chatan.ru") {
+            post("/sign-up") {
+                val deviceId = getDeviceId() ?: return@post call.respond(Response.error<String>(code = 400))
+                val signUpRequest = call.receive<SignUpRequest>()
+                if (userService.fetch(name = signUpRequest.name) != null) return@post call.respond(
+                    Response.error<String>(
+                        code = 409
                     )
                 )
-            )
-        }
 
-        post("/sign-in") {
-            val deviceId = getDeviceId() ?: return@post call.respond(Response.error<Nothing>(code = 400))
-            val signInRequest = call.receive<SignInRequest>()
-            val user = userService.fetch(name = signInRequest.name) ?: return@post call.respond(
-                Response.error<Nothing>(
-                    code = 400,
-                    message = "Неверный логин или пароль"
-                )
-            )
+                val securedPassword = PasswordService.encryptPassword(password = signUpRequest.password)
+                val userId = userService.create(name = signUpRequest.name, password = securedPassword)
 
-            if (user.password != PasswordService.encryptPassword(signInRequest.password)) return@post call.respond(
-                Response.error<Nothing>(code = 400, message = "Неверный логин или пароль")
-            )
+                val token = JwtService.encryptJson(json = userId.toString())
+                val refreshToken = JwtService.generateRefreshToken()
 
-            val token = JwtService.encryptJson(json = user.id.toString())
-            val refreshToken = JwtService.generateRefreshToken()
+                userTokenService.create(userId = userId, deviceId = deviceId, refreshToken = refreshToken)
 
-            if(userTokenService.fetch(deviceId = deviceId, userId = user.id) != null)
-                userTokenService.update(userId = user.id, deviceId = deviceId, refreshToken = refreshToken)
-            else userTokenService.create(userId = user.id, deviceId = deviceId, refreshToken = refreshToken)
-
-            call.respond(
-                HttpStatusCode.OK, Response.success(
-                    data = SignInResponse(
-                        name = user.name,
-                        token = token,
-                        refreshToken = refreshToken
+                call.respond(
+                    HttpStatusCode.OK,
+                    Response.success(
+                        data = SignUpResponse(
+                            name = signUpRequest.name,
+                            token = token,
+                            refreshToken = refreshToken
+                        )
                     )
                 )
-            )
-        }
+            }
 
-        post("/sign-in-auto") {
-            val deviceId = getDeviceId() ?: return@post call.respond(Response.error<Nothing>(code = 400))
-            val signInAutoRequest = call.receive<SignInAutoRequest>()
-            val userId = getUserId() ?: return@post call.respond(Response.error<Nothing>(code = 401))
-            val user = userService.fetch(userId = userId) ?: return@post call.respond(Response.error<Nothing>(code = 404))
+            post("/sign-in") {
+                val deviceId = getDeviceId() ?: return@post call.respond(Response.error<Nothing>(code = 400))
+                val signInRequest = call.receive<SignInRequest>()
+                val user = userService.fetch(name = signInRequest.name) ?: return@post call.respond(
+                    Response.error<Nothing>(
+                        code = 400,
+                        message = "Неверный логин или пароль"
+                    )
+                )
 
-            val tokens = userTokenService.fetch(deviceId = deviceId, userId = userId) ?: return@post call.respond(Response.error<Nothing>(code = 404))
-            if (tokens.refreshToken != signInAutoRequest.refreshToken) return@post call.respond(Response.error<Nothing>(code = 404))
+                if (user.password != PasswordService.encryptPassword(signInRequest.password)) return@post call.respond(
+                    Response.error<Nothing>(code = 400, message = "Неверный логин или пароль")
+                )
 
-            call.respond(
-                HttpStatusCode.OK, Response.success(data = SignInAutoResponse(name = user.name))
-            )
+                val token = JwtService.encryptJson(json = user.id.toString())
+                val refreshToken = JwtService.generateRefreshToken()
+
+                if (userTokenService.fetch(deviceId = deviceId, userId = user.id) != null)
+                    userTokenService.update(userId = user.id, deviceId = deviceId, refreshToken = refreshToken)
+                else userTokenService.create(userId = user.id, deviceId = deviceId, refreshToken = refreshToken)
+
+                call.respond(
+                    HttpStatusCode.OK, Response.success(
+                        data = SignInResponse(
+                            name = user.name,
+                            token = token,
+                            refreshToken = refreshToken
+                        )
+                    )
+                )
+            }
+
+            post("/sign-in-auto") {
+                val deviceId = getDeviceId() ?: return@post call.respond(Response.error<Nothing>(code = 400))
+                val signInAutoRequest = call.receive<SignInAutoRequest>()
+                val userId = getUserId() ?: return@post call.respond(Response.error<Nothing>(code = 401))
+                val user =
+                    userService.fetch(userId = userId) ?: return@post call.respond(Response.error<Nothing>(code = 404))
+
+                val tokens = userTokenService.fetch(deviceId = deviceId, userId = userId) ?: return@post call.respond(
+                    Response.error<Nothing>(code = 404)
+                )
+                if (tokens.refreshToken != signInAutoRequest.refreshToken) return@post call.respond(
+                    Response.error<Nothing>(
+                        code = 404
+                    )
+                )
+
+                call.respond(
+                    HttpStatusCode.OK, Response.success(data = SignInAutoResponse(name = user.name))
+                )
+            }
         }
     }
 }
