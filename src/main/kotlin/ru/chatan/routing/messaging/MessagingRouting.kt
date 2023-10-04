@@ -39,7 +39,7 @@ fun Application.configureMessagingRouting() {
             getDeviceId() ?: return@get call.respond(Response.error<String>(code = 400))
             val userId = getUserId() ?: return@get call.respond(Response.error<Nothing>(code = 401))
             val chatId = call.request.queryParameters[CHAT_ID]?.toLongOrNull() ?: return@get call.respond(
-                Response.error<String>(code = 400)
+                Response.error<String>(code = 400, message = "chatId not found")
             )
 
             val chat = chatService.fetch(chatId = listOf(chatId)).singleOrNull()
@@ -63,7 +63,11 @@ fun Application.configureMessagingRouting() {
                 )
             }
 
-            call.respond(HttpStatusCode.OK, ChatMessages(messages = messages))
+            call.respond(
+                HttpStatusCode.OK, Response.success(
+                    data = ChatMessages(messages = messages)
+                )
+            )
         }
 
         webSocket("/chat-messages") {
