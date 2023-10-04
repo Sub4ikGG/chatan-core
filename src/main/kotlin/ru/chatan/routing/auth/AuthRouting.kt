@@ -84,7 +84,7 @@ fun Application.configureAuthRouting() {
             post("/sign-in-auto") {
                 val deviceId = getDeviceId() ?: return@post call.respond(Response.error<Nothing>(code = 400))
                 val signInAutoRequest = call.receive<SignInAutoRequest>()
-                val userId = getUserId() ?: return@post call.respond(Response.error<Nothing>(code = 401))
+                val userId = getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)
                 val user =
                     userService.fetch(userId = userId) ?: return@post call.respond(Response.error<Nothing>(code = 404))
 
@@ -99,6 +99,39 @@ fun Application.configureAuthRouting() {
 
                 call.respond(
                     HttpStatusCode.OK, Response.success(data = SignInAutoResponse(name = user.name))
+                )
+            }
+
+            post("/token-refresh") {
+                val deviceId = getDeviceId() ?: return@post call.respond(Response.error<Nothing>(code = 400))
+                val tokenRefreshRequest = call.receive<RefreshTokenRequest>()
+                val refreshToken = tokenRefreshRequest.refreshToken
+
+                val tokenModel = userTokenService.fetch(deviceId = deviceId, refreshToken = refreshToken)
+                    ?: return@post call.respond(Response.error<Nothing>(code = 401))
+
+                val newToken = JwtService.encryptJson(json = tokenModel.userId.toString())
+                val newRefreshToken = JwtService.generateRefreshToken()
+
+                if (userTokenService.fetch(deviceId = deviceId, userId = tokenModel.userId) != null)
+                    userTokenService.update(
+                        userId = tokenModel.userId,
+                        deviceId = deviceId,
+                        refreshToken = newRefreshToken
+                    )
+                else userTokenService.create(
+                    userId = tokenModel.userId,
+                    deviceId = deviceId,
+                    refreshToken = newRefreshToken
+                )
+
+                call.respond(
+                    Response.success(
+                        data = RefreshTokenResponse(
+                            token = newToken,
+                            refreshToken = newRefreshToken
+                        )
+                    )
                 )
             }
         }
