@@ -7,7 +7,6 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.websocket.*
-import kotlinx.coroutines.launch
 import ru.chatan.Response
 import ru.chatan.data.database.chat.ChatConfigurationService
 import ru.chatan.data.database.chat.ChatService
@@ -38,12 +37,6 @@ fun Application.configureChatRouting() {
     val userService = UserService(database)
     val messageService = MessageService(database)
     val sessionsRepository = SessionsRepositoryImpl.newInstance()
-
-    launch {
-        val chatId = chatService.create(name = "Chatan", description = "Chatan", code = "#chatan")
-        chatUserService.create(chatId = chatId, userId = 1, role = ChatUserRole.SUPERUSER)
-        chatConfigurationService.create(chatId = chatId, userLimit = 10, state = ChatState.OPENED)
-    }
 
     routing {
         get("/chats") {
@@ -130,12 +123,15 @@ private suspend fun getWelcomeChatMessage(
     chat: ChatModel
 ): ChatMessage {
     val body = "${user.name} присоединился в чат!"
+
+    val date = System.currentTimeMillis() / 1000
     val chatMessageId =
-        messageService.create(chatId = chat.id, userId = -1, body = body)
+        messageService.create(chatId = chat.id, userId = -1, body = body, date = date)
 
     return ChatMessage(
         id = chatMessageId,
         user = null,
-        body = body
+        body = body,
+        date = date
     )
 }

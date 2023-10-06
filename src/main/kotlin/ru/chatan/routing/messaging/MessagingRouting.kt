@@ -20,7 +20,10 @@ import ru.chatan.data.session.models.Session
 import ru.chatan.getDeviceId
 import ru.chatan.getUserId
 import ru.chatan.plugins.database
-import ru.chatan.routing.messaging.models.*
+import ru.chatan.routing.messaging.models.ChatMessage
+import ru.chatan.routing.messaging.models.ChatUser
+import ru.chatan.routing.messaging.models.ListenChatMessages
+import ru.chatan.routing.messaging.models.SendMessage
 import ru.chatan.service.JwtService
 
 private const val CHAT_ID = "chatId"
@@ -35,7 +38,7 @@ fun Application.configureMessagingRouting() {
     val sessionsRepository = SessionsRepositoryImpl.newInstance()
 
     routing {
-        get("/chat-messages") {
+        get("/chat/chat-messages") {
             getDeviceId() ?: return@get call.respond(Response.error<String>(code = 400))
             val userId = getUserId() ?: return@get call.respond(Response.error<Nothing>(code = 401))
             val chatId = call.request.queryParameters[CHAT_ID]?.toLongOrNull() ?: return@get call.respond(
@@ -48,29 +51,16 @@ fun Application.configureMessagingRouting() {
                 Response.error<String>(code = 400)
             )
 
-            val messages = messageService.fetch(chatId = chat.id).map { messageModel ->
-                val user =
-                    if (messageModel.userId != -1L)
-                        userService.fetch(userId = messageModel.userId) ?: return@get
-                    else null
-
-                val chatUser = if (user != null) ChatUser(id = user.id, name = user.name) else null
-
-                ChatMessage(
-                    id = messageModel.id,
-                    user = chatUser,
-                    body = messageModel.body
-                )
-            }
+            val messages = getChatMessages(chat = chat, messageService = messageService, userService = userService)
 
             call.respond(
                 HttpStatusCode.OK, Response.success(
-                    data = ChatMessages(messages = messages)
+                    data = messages
                 )
             )
         }
 
-        webSocket("/chat-messages") {
+        webSocket("/chat/chat-messages") {
             val socketSession = this
 
             val accessJson = (incoming.receive() as? Frame.Text)?.readText()
@@ -86,7 +76,6 @@ fun Application.configureMessagingRouting() {
                     message = "User not found"
                 )
             )
-            val chatUser = ChatUser(id = user.id, name = user.name)
 
             val chat = chatService.fetch(chatId = listOf(access.chatId)).singleOrNull()
                 ?: return@webSocket socketSession.close(reason = CloseReason(code = 404, message = "Chat not found"))
@@ -95,6 +84,9 @@ fun Application.configureMessagingRouting() {
                     chatId = chat.id
                 ) == null
             ) return@webSocket socketSession.close(reason = CloseReason(code = 404, message = "User chat not found"))
+
+            val messages = getChatMessages(chat = chat, messageService = messageService, userService = userService)
+            sendSerialized(messages)
 
             // Начало сессии
             val session = Session(
@@ -107,9 +99,9 @@ fun Application.configureMessagingRouting() {
             socketSession.listenWebSocketChatMessages(
                 sessionsRepository = sessionsRepository,
                 messageService = messageService,
+                userService = userService,
                 chat = chat,
-                user = user,
-                chatUser = chatUser
+                user = user
             )
 
             // Конец сессии
@@ -121,27 +113,24 @@ fun Application.configureMessagingRouting() {
 private suspend fun DefaultWebSocketServerSession.listenWebSocketChatMessages(
     sessionsRepository: SessionsRepository,
     messageService: MessageService,
+    userService: UserService,
     chat: ChatModel,
-    user: UserModel,
-    chatUser: ChatUser
+    user: UserModel
 ) {
     try {
         for (frame in this.incoming) {
             val frameJson = (frame as? Frame.Text)?.readText()
             val message = Gson().fromJson(frameJson, SendMessage::class.java)
-            val chatMessageId =
-                messageService.create(chatId = chat.id, userId = user.id, body = message.body)
+
+            val date = System.currentTimeMillis() / 1000
+            messageService.create(chatId = chat.id, userId = user.id, body = message.body, date = date)
 
             sessionsRepository.get(chatId = chat.id).forEach { userSession ->
                 try {
                     if (userSession.userId != user.id) {
-                        val chatMessage = ChatMessage(
-                            id = chatMessageId,
-                            user = chatUser,
-                            body = message.body
-                        )
-
-                        userSession.session.send(Gson().toJson(chatMessage))
+                        val messages =
+                            getChatMessages(chat = chat, messageService = messageService, userService = userService)
+                        userSession.session.send(Gson().toJson(messages))
                     }
                 } catch (e: Exception) {
                     userSession.session.close()
@@ -155,5 +144,44 @@ private suspend fun DefaultWebSocketServerSession.listenWebSocketChatMessages(
 
         println("Error with userId ${user.id} in chatId ${chat.id}: ${e.localizedMessage}")
         return
+    }
+}
+
+private suspend fun getChatMessages(
+    chat: ChatModel,
+    messageService: MessageService,
+    userService: UserService
+): List<ChatMessage> {
+    val users = mutableMapOf<Long?, ChatUser?>()
+
+    return messageService.fetch(chatId = chat.id, page = 0).map { messageModel ->
+        val chatUser = if (!users.containsKey(messageModel.userId)) {
+            val user =
+                if (messageModel.userId != -1L)
+                    userService.fetch(userId = messageModel.userId) ?: return emptyList()
+                else null
+
+            val chatUser = if (user != null) ChatUser(id = user.id, name = user.name) else null
+            users[chatUser?.id] = chatUser
+
+            println(
+                "-----------------------\n\n\n\n\n\n\n$users-----------------------\n" +
+                        "\n" +
+                        "\n" +
+                        "\n" +
+                        "\n" +
+                        "\n" +
+                        "\n"
+            )
+
+            chatUser
+        } else users[messageModel.userId]
+
+        ChatMessage(
+            id = messageModel.id,
+            user = chatUser,
+            body = messageModel.body,
+            date = messageModel.date
+        )
     }
 }

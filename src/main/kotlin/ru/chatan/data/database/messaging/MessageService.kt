@@ -12,6 +12,7 @@ class MessageService(private val database: Database) {
         val chatId = long("chat_id")
         val userId = long("user_id")
         val body = varchar("body", 4096)
+        val date = long("date")
     }
 
     init {
@@ -20,30 +21,36 @@ class MessageService(private val database: Database) {
         }
     }
 
-    suspend fun create(chatId: Long, userId: Long, body: String): Long {
+    suspend fun create(chatId: Long, userId: Long, body: String, date: Long): Long {
         return dbQuery {
             Message.insert {
                 it[Message.chatId] = chatId
                 it[Message.userId] = userId
                 it[Message.body] = body.take(4096)
+                it[Message.date] = date
             }[Message.id]
         }
     }
 
-    suspend fun fetch(chatId: Long): List<MessageModel> {
+    suspend fun fetch(chatId: Long, page: Int): List<MessageModel> {
         return dbQuery {
             Message.select(where = { Message.chatId eq chatId })
                 .orderBy(Message.id, SortOrder.DESC)
-                .limit(500)
+                .limit(n = PAGE_SIZE, offset = (page * PAGE_SIZE).toLong())
                 .map {
                     MessageModel(
                         id = it[Message.id],
                         chatId = chatId,
                         userId = it[Message.userId],
-                        body = it[Message.body]
+                        body = it[Message.body],
+                        date = it[Message.date]
                     )
                 }
         }
+    }
+
+    private companion object {
+        const val PAGE_SIZE = 200
     }
 
 }

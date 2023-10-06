@@ -50,6 +50,8 @@ dependencies {
     testImplementation("io.ktor:ktor-server-tests-jvm")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
 
+    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
+
     // JWT Tokens
     implementation("io.jsonwebtoken:jjwt-api:0.11.5")
     implementation("io.jsonwebtoken:jjwt-impl:0.11.5")
