@@ -7,6 +7,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.websocket.*
+import ru.chatan.Constants
 import ru.chatan.Response
 import ru.chatan.data.database.chat.ChatConfigurationService
 import ru.chatan.data.database.chat.ChatService
@@ -56,13 +57,17 @@ fun Application.configureChatRouting() {
         }
 
         post("/create-chat") {
-            getDeviceId() ?: return@post call.respond(Response.error<String>(code = 400))
-            val userId = getUserId() ?: return@post call.respond(Response.error<Nothing>(code = 401))
+            getDeviceId() ?: return@post call.respond(Constants.DEVICE_ID_ERROR)
+            val userId = getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)
             val createChatRequest = call.receive<CreateChatRequest>()
 
             if (createChatRequest.userLimit < 1) return@post call.respond(Response.error<Nothing>(code = 400))
             if (createChatRequest.code.first() != '#') return@post call.respond(Response.error<Nothing>(code = 400))
-            if (createChatRequest.code.replace("#", " ").length < 3) return@post call.respond(Response.error<Nothing>(code = 400))
+            if (createChatRequest.code.replace("#", "").length < 3) return@post call.respond(
+                Response.error<Nothing>(
+                    code = 400
+                )
+            )
 
             val chatId = chatService.create(name = createChatRequest.name, description = createChatRequest.description, code = createChatRequest.code)
             chatUserService.create(chatId = chatId, userId = userId, role = ChatUserRole.SUPERUSER)
@@ -72,7 +77,7 @@ fun Application.configureChatRouting() {
         }
 
         post("/connect-to-the-chat") {
-            getDeviceId() ?: return@post call.respond(Response.error<String>(code = 400))
+            getDeviceId() ?: return@post call.respond(Constants.DEVICE_ID_ERROR)
             val userId = getUserId() ?: return@post call.respond(Response.error<Nothing>(code = 401))
             val connectToTheChatRequest = call.receive<ConnectToTheChatRequest>()
 
@@ -82,11 +87,21 @@ fun Application.configureChatRouting() {
                     message = "Пользователь не найден"
                 )
             )
-            val chat = chatService.fetch(chatId = listOf(connectToTheChatRequest.chatId)).singleOrNull() ?: return@post call.respond(Response.error<Nothing>(code = 404, message = "Чат не найден"))
-            val chatConfiguration = chatConfigurationService.fetch(chatId = connectToTheChatRequest.chatId) ?: return@post call.respond(Response.error<Nothing>(code = 404, message = "Конфигурация чата не найдена"))
+
+
+            val chat = chatService.fetch(code = connectToTheChatRequest.code)
+                ?: return@post call.respond(Response.error<Nothing>(code = 404, message = "Чат не найден"))
+            val chatConfiguration = chatConfigurationService.fetch(chatId = chat.id) ?: return@post call.respond(
+                Response.error<Nothing>(
+                    code = 404,
+                    message = "Конфигурация чата не найдена"
+                )
+            )
             val chatUsersCount = chatUserService.fetchUsersCount(chatId = chat.id)
 
-            if (chatUserService.fetchByUserId(chatId = chat.id, userId = userId) != null) return@post call.respond(Response.error<Nothing>(code = 400))
+            if (chatUserService.fetchByUserId(chatId = chat.id, userId = userId) != null) return@post call.respond(
+                Response.error<Nothing>(code = 400, message = "Пользователь уже состоит в этом чате")
+            )
             if (chat.code != connectToTheChatRequest.code) return@post call.respond(Response.error<Nothing>(code = 400, message = "Неверный код доступа"))
             if (chatConfiguration.userLimit < chatUsersCount + 1)
                 return@post call.respond(Response.error<Nothing>(code = 400, message = "Лимит участников чата превышен"))

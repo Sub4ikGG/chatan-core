@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class ListenChatMessages(
-    val deviceId: Long,
+    val deviceId: String,
     val token: String,
     val chatId: Long
 )
