@@ -88,7 +88,6 @@ fun Application.configureChatRouting() {
                 )
             )
 
-
             val chat = chatService.fetch(code = connectToTheChatRequest.code)
                 ?: return@post call.respond(Response.error<Nothing>(code = 404, message = "Чат не найден"))
             val chatConfiguration = chatConfigurationService.fetch(chatId = chat.id) ?: return@post call.respond(
@@ -117,7 +116,7 @@ fun Application.configureChatRouting() {
             }
 
             chatUserService.create(chatId = chat.id, userId = userId)
-            call.respond(HttpStatusCode.OK, Response.success<Nothing>())
+            call.respond(HttpStatusCode.OK, Response.success(data = chat))
         }
 
         get("/get-chat-users") {
