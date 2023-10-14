@@ -1,6 +1,5 @@
 package ru.chatan.routing.file
 
-import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
@@ -10,7 +9,7 @@ import kotlinx.coroutines.withContext
 import ru.chatan.Response
 import ru.chatan.data.database.avatar.AvatarService
 import ru.chatan.data.database.avatar.UserAvatar
-import ru.chatan.getUserId
+import ru.chatan.fileStorage
 import ru.chatan.plugins.database
 import ru.chatan.routing.file.models.UploadAvatar
 import java.io.File
@@ -24,7 +23,7 @@ fun Application.configureFileRouting() {
         host("api.chatan.ru") {
 
             post("/avatar/upload") {
-                val userId = getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)
+                val userId = /*getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)*/4L
                 val uploadAvatar = call.receive<UploadAvatar>()
 
                 val uuid = UUID.nameUUIDFromBytes(System.currentTimeMillis().toString().toByteArray()).toString()
@@ -38,6 +37,8 @@ fun Application.configureFileRouting() {
                     fos.write(avatarBytes)
                     fos.flush()
                     fos.close()
+
+                    fileStorage.load(file = file)
                 }
 
                 avatarService.create(userId = userId, uuid = uuid)

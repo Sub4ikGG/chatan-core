@@ -27,11 +27,11 @@ class FileStorage {
 
 //    fun buildNoImageHref() = "https://s3.timeweb.com/$S3_BUCKET/no-image.jpeg"
 
-    fun remove(uuid: String) {
+    fun remove(uuid: String, type: String) {
         minio.removeObject(
             RemoveObjectArgs.builder()
                 .bucket(S3_BUCKET)
-                .`object`("$uuid.jpeg")
+                .`object`("$uuid.$type")
                 .build()
         )
     }
