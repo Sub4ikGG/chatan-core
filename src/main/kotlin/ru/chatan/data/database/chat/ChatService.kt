@@ -35,13 +35,20 @@ class ChatService(private val database: Database) {
 
     suspend fun fetch(chatId: List<Long>): List<ChatModel> {
         return dbQuery {
-            Chat.select(where = { Chat.id inList chatId }).map { row ->
-                ChatModel(
-                    id = row[Chat.id],
-                    code = row[Chat.code],
-                    name = row[Chat.name],
-                    description = row[Chat.description]
-                )
+            val result = Chat.select(where = { Chat.id inList chatId })
+                .map { row ->
+                    ChatModel(
+                        id = row[Chat.id],
+                        code = row[Chat.code],
+                        name = row[Chat.name],
+                        description = row[Chat.description]
+                    )
+                }
+
+            chatId.mapNotNull { id ->
+                result.find { chat ->
+                    chat.id == id
+                }
             }
         }
     }

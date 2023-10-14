@@ -36,7 +36,7 @@ class MessageService(private val database: Database) {
         return dbQuery {
             Message.select(where = { Message.chatId eq chatId })
                 .orderBy(Message.id, SortOrder.DESC)
-                .limit(n = PAGE_SIZE, offset = (page * PAGE_SIZE).toLong())
+                .limit(n = MESSAGE_PER_PAGE, offset = (page * MESSAGE_PER_PAGE).toLong())
                 .map {
                     MessageModel(
                         id = it[Message.id],
@@ -50,7 +50,7 @@ class MessageService(private val database: Database) {
     }
 
     private companion object {
-        const val PAGE_SIZE = 200
+        const val MESSAGE_PER_PAGE = 100
     }
 
 }

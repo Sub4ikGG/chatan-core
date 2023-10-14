@@ -53,7 +53,9 @@ class ChatUserService(private val database: Database) {
 
     suspend fun fetchByUserId(userId: Long, chatId: Long): ChatUserModel? {
         return dbQuery {
-            val row = ChatUser.select(where = { ChatUser.userId eq userId }).singleOrNull() ?: return@dbQuery null
+            val row =
+                ChatUser.select(where = { (ChatUser.userId eq userId) and (ChatUser.chatId eq chatId) }).singleOrNull()
+                    ?: return@dbQuery null
 
             ChatUserModel(
                 id = row[ChatUser.id],

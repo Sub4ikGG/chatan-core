@@ -22,10 +22,8 @@ import ru.chatan.data.session.SessionsRepositoryImpl
 import ru.chatan.getDeviceId
 import ru.chatan.getUserId
 import ru.chatan.plugins.database
-import ru.chatan.routing.chat.models.ChatsResponse
 import ru.chatan.routing.chat.models.ConnectToTheChatRequest
 import ru.chatan.routing.chat.models.CreateChatRequest
-import ru.chatan.routing.chat.models.CreateChatResponse
 import ru.chatan.routing.messaging.models.ChatMessage
 
 private const val CHAT_ID = "chatId"
@@ -42,16 +40,11 @@ fun Application.configureChatRouting() {
     routing {
         get("/chats") {
             getDeviceId() ?: return@get call.respond(Response.error<String>(code = 400))
-            val userId = getUserId() ?: return@get call.respond(Response.error<Nothing>(code = 401))
+            val userId = getUserId() ?: return@get call.respond(HttpStatusCode.Unauthorized)
 
             val userChats = chatUserService.fetchByUserId(userId = userId)
             val userChatsId = userChats.map { it.chatId }
-            val chats = chatService.fetch(chatId = userChatsId).map {
-                ChatsResponse(
-                    chatId = it.id,
-                    name = it.name
-                )
-            }
+            val chats = chatService.fetch(chatId = userChatsId)
 
             call.respond(HttpStatusCode.OK, Response.success(data = chats))
         }
@@ -61,19 +54,36 @@ fun Application.configureChatRouting() {
             val userId = getUserId() ?: return@post call.respond(HttpStatusCode.Unauthorized)
             val createChatRequest = call.receive<CreateChatRequest>()
 
-            if (createChatRequest.userLimit < 1) return@post call.respond(Response.error<Nothing>(code = 400))
-            if (createChatRequest.code.first() != '#') return@post call.respond(Response.error<Nothing>(code = 400))
+            if (createChatRequest.name.length < 2) return@post call.respond(
+                Response.error<Nothing>(
+                    code = 400,
+                    message = "Длина чата не меньше 2 символов"
+                )
+            )
+            if (createChatRequest.userLimit < 1) return@post call.respond(
+                Response.error<Nothing>(
+                    code = 400,
+                    message = "Число участников должно быть больше 1"
+                )
+            )
+            if (createChatRequest.code.first() != '#') return@post call.respond(
+                Response.error<Nothing>(
+                    code = 400,
+                    message = "Код чата должен начинаться с решетки"
+                )
+            )
             if (createChatRequest.code.replace("#", "").length < 3) return@post call.respond(
                 Response.error<Nothing>(
-                    code = 400
+                    code = 400, message = "Длина кода чата должна быть не меньше 4 символов"
                 )
             )
 
             val chatId = chatService.create(name = createChatRequest.name, description = createChatRequest.description, code = createChatRequest.code)
+            val chat = chatService.fetch(code = createChatRequest.code)
             chatUserService.create(chatId = chatId, userId = userId, role = ChatUserRole.SUPERUSER)
             chatConfigurationService.create(chatId = chatId, userLimit = createChatRequest.userLimit, state = ChatState.OPENED)
 
-            call.respond(HttpStatusCode.OK, Response.success(data = CreateChatResponse(chatId = chatId)))
+            call.respond(HttpStatusCode.OK, Response.success(data = chat))
         }
 
         post("/connect-to-the-chat") {
